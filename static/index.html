@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Java Online Compiler</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #editor {
+            width: 100%;
+            height: 300px;
+            font-family: monospace;
+        }
+        #output {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Collaborative Java Online Compiler</h1>
+    <div>Room ID: <span id="roomId"></span></div>
+    <textarea id="editor" placeholder="Enter your Java code here..."></textarea>
+    <br><br>
+    <button onclick="compileAndRun()">Compile and Run</button>
+    <h2>Output:</h2>
+    <pre id="output"></pre>
+
+    <script>
+        const roomId = Math.random().toString(36).substring(7);
+        document.getElementById('roomId').textContent = roomId;
+
+        const ws = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
+        const editor = document.getElementById('editor');
+        const output = document.getElementById('output');
+
+        editor.addEventListener('input', () => {
+            ws.send(editor.value);
+        });
+
+        ws.onmessage = (event) => {
+            const message = event.data;
+            if (message.startsWith('CODE:')) {
+                editor.value = message.slice(5);
+            } else if (message.startsWith('OUTPUT:')) {
+                output.textContent = message.slice(7);
+            }
+        };
+
+        function compileAndRun() {
+            ws.send('CODE:' + editor.value);
+        }
+    </script>
+</body>
+</html>
