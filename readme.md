@@ -1,12 +1,7 @@
-## 🎉🎉 PyComp
+### Java Code compiler written in python FASTapi
 
-### Java Code compiler written in python.
 
-This is yet another compiler meant for babcock students project which was created using pure python along with the default java compiler.
-
-### ✔🌹 Running
-
-As you well know that this is a python based compiler, running this means you must have the stable version of python installed on your PC. [Download Here](https://www.python.org).
+### ✔ Running
 
 1. Make sure you have python and java installed
 
@@ -23,5 +18,3 @@ As you well know that this is a python based compiler, running this means you mu
 ```python
     python app.py
 ```
-
-5. 🎉🎉❤ Youre ready to use it, follow the instructions provided by the compiler.
