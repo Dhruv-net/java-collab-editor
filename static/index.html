@@ -3,59 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Collaborative Java Online Compiler</title>
+    <title>Collaborative Java Editor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
+            margin: 0;
             padding: 20px;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-        #editor {
-            width: 100%;
+        #room-selection, #editor-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            width: 90%;
+            max-width: 800px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #333;
+            margin-top: 0;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #code-editor {
+            width: calc(100% - 22px);
             height: 300px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
             font-family: monospace;
         }
         #output {
-            background-color: #f0f0f0;
+            width: calc(100% - 22px);
+            min-height: 100px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             padding: 10px;
-            border-radius: 5px;
             white-space: pre-wrap;
+            background-color: #f8f8f8;
+            font-family: monospace;
+        }
+        #status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <h1>Collaborative Java Online Compiler</h1>
-    <div>Room ID: <span id="roomId"></span></div>
-    <textarea id="editor" placeholder="Enter your Java code here..."></textarea>
-    <br><br>
-    <button onclick="compileAndRun()">Compile and Run</button>
-    <h2>Output:</h2>
-    <pre id="output"></pre>
+    <div id="room-selection">
+        <h2>Collaborative Java Editor</h2>
+        <input type="text" id="username" placeholder="Enter your username">
+        <input type="text" id="room-id" placeholder="Enter Room ID">
+        <div>
+            <button id="create-room">Create Room</button>
+            <button id="join-room">Join Room</button>
+        </div>
+    </div>
+    <div id="editor-container" style="display: none;">
+        <textarea id="code-editor" placeholder="Enter your Java code here..."></textarea>
+        <button id="run-code">Run Code</button>
+        <div id="status"></div>
+        <h3>Output:</h3>
+        <pre id="output"></pre>
+    </div>
 
     <script>
-        const roomId = Math.random().toString(36).substring(7);
-        document.getElementById('roomId').textContent = roomId;
-
-        const ws = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
-        const editor = document.getElementById('editor');
+        const createRoomBtn = document.getElementById('create-room');
+        const joinRoomBtn = document.getElementById('join-room');
+        const roomIdInput = document.getElementById('room-id');
+        const usernameInput = document.getElementById('username');
+        const editorContainer = document.getElementById('editor-container');
+        const codeEditor = document.getElementById('code-editor');
+        const runCodeBtn = document.getElementById('run-code');
         const output = document.getElementById('output');
+        const status = document.getElementById('status');
+        let socket;
+        let username;
 
-        editor.addEventListener('input', () => {
-            ws.send(editor.value);
-        });
+        createRoomBtn.addEventListener('click', createRoom);
+        joinRoomBtn.addEventListener('click', joinRoom);
+        runCodeBtn.addEventListener('click', runCode);
 
-        ws.onmessage = (event) => {
-            const message = event.data;
-            if (message.startsWith('CODE:')) {
-                editor.value = message.slice(5);
-            } else if (message.startsWith('OUTPUT:')) {
-                output.textContent = message.slice(7);
+        async function createRoom() {
+            const response = await fetch('/create-room', { method: 'POST' });
+            const data = await response.json();
+            roomIdInput.value = data.room_id;
+            alert(`Room created! Room ID: ${data.room_id}`);
+        }
+
+        async function joinRoom() {
+            const roomId = roomIdInput.value.trim();
+            username = usernameInput.value.trim() || 'Anonymous';
+            if (!roomId) {
+                alert('Please enter a Room ID');
+                return;
             }
-        };
 
-        function compileAndRun() {
-            ws.send('CODE:' + editor.value);
+            const response = await fetch(`/join-room/${roomId}`);
+            if (response.ok) {
+                document.getElementById('room-selection').style.display = 'none';
+                editorContainer.style.display = 'block';
+                connectWebSocket(roomId);
+            } else {
+                alert('Room not found');
+            }
+        }
+
+        function connectWebSocket(roomId) {
+            socket = new WebSocket(`ws://${window.location.host}/ws/${roomId}`);
+
+            socket.onopen = function() {
+                socket.send(JSON.stringify({type: "join", username: username}));
+            };
+
+            socket.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                if (message.type === 'code') {
+                    codeEditor.value = message.content;
+                    status.textContent = `${message.username} is typing...`;
+                } else if (message.type === 'output') {
+                    output.textContent = message.content;
+                    status.textContent = '';
+                } else if (message.type === 'status') {
+                    status.textContent = message.content;
+                }
+            };
+
+            let typingTimer;
+            codeEditor.addEventListener('input', function() {
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                    socket.send(JSON.stringify({type: "code", content: codeEditor.value}));
+                }, 500);
+            });
+        }
+
+        function runCode() {
+            socket.send(JSON.stringify({type: "run", content: codeEditor.value}));
         }
     </script>
 </body>
